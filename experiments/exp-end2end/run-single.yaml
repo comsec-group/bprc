@@ -1,0 +1,129 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# we reboot to re-randomize kaslr and to ensure no cheating kernel modules are loaded
+- name: "Reboot target"
+  become: true
+  ansible.builtin.reboot:
+
+- name: "Run attack Once"
+  block:
+    - name: "create output dir"
+      ansible.builtin.file:
+        path: "{{ local_out_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+      delegate_to: localhost
+
+    - name: "Cleanup the experiment"
+      community.general.make:
+        chdir: "{{ experiment_dir }}"
+        target: clean
+        params:
+          MARCH: "{{ experiment_march }}"
+
+    - name: "Build the experiment"
+      community.general.make:
+        chdir: "{{ experiment_dir }}"
+        params:
+          MARCH: "{{ experiment_march }}"
+      register: build
+    - name: Store build stdout
+      ansible.builtin.copy:
+        content: "{{ build.stdout | default('error') | replace('\\n', '\n') }}"
+        dest: "{{ local_out_dir }}/{{ inventory_hostname }}-build.out"
+        mode: "660"
+      delegate_to: localhost
+    - name: Store build stderr
+      ansible.builtin.copy:
+        content: "{{ build.stderr | default('error') | replace('\\n', '\n') }}"
+        dest: "{{ local_out_dir }}/{{ inventory_hostname }}-build.err"
+        mode: "660"
+      delegate_to: localhost
+
+    - name: "Break KASLR"
+      community.general.make:
+        chdir: "{{ experiment_dir }}"
+        target: run-kaslr
+        params:
+          MARCH: "{{ experiment_march }}"
+          CORE: "{{ experiment_core }}"
+      register: make_run_kaslr
+    - name: Store kaslr stdout
+      ansible.builtin.copy:
+        content: "{{ make_run_kaslr.stdout | default('error') | replace('\\n', '\n') }}"
+        dest: "{{ local_out_dir }}/{{ inventory_hostname }}-kaslr.out"
+        mode: "660"
+      delegate_to: localhost
+    - name: Store kaslr stderr
+      ansible.builtin.copy:
+        content: "{{ make_run_kaslr.stderr | default('error') | replace('\\n', '\n') }}"
+        dest: "{{ local_out_dir }}/{{ inventory_hostname }}-kaslr.err"
+        mode: "660"
+      delegate_to: localhost
+    
+    - name: "Extract KASLR Offset"
+      ansible.builtin.set_fact:
+        kaslr_offset: "{{ (make_run_kaslr.stdout_lines | select('match', '.+KASLR offset:.+') | list)[0][27:] }}"
+
+    - name: "Run shadow attack"
+      community.general.make:
+        chdir: "{{ experiment_dir }}"
+        target: run-shadow
+        params:
+          MARCH: "{{ experiment_march }}"
+          CORE: "{{ experiment_core }}"
+          KASLR_OFFSET: "{{ kaslr_offset }}"
+      register: make_run_shadow
+    - name: Store shadow stdout
+      ansible.builtin.copy:
+        content: "{{ make_run_shadow.stdout | default('error') | replace('\\n', '\n') }}"
+        dest: "{{ local_out_dir }}/{{ inventory_hostname }}-shadow.out"
+        mode: "660"
+      delegate_to: localhost
+    - name: Store shadow stderr
+      ansible.builtin.copy:
+        content: "{{ make_run_shadow.stderr | default('error') | replace('\\n', '\n') }}"
+        dest: "{{ local_out_dir }}/{{ inventory_hostname }}-shadow.err"
+        mode: "660"
+      delegate_to: localhost
+
+    - name: "Load secret kernel module to benchmark leak bandwith"
+      vars:
+        kmod_name: "secret"
+        kmod_path: "{{ base_dir }}/uarch-research-fw/kmod_secret"
+      block:
+        - name: clean kernel module
+          community.general.make:
+            chdir: "{{ framework_dir }}/kmod_secret"
+            target: clean
+        - name: build kernel module
+          community.general.make:
+            chdir: "{{ framework_dir }}/kmod_secret"
+        - name: install kernel module
+          become: true
+          community.general.make:
+            chdir: "{{ framework_dir }}/kmod_secret"
+            target: install
+
+    - name: "Run benchmark"
+      community.general.make:
+        chdir: "{{ experiment_dir }}"
+        target: run-benchmark
+        params:
+          MARCH: "{{ experiment_march }}"
+          CORE: "{{ experiment_core }}"
+          KASLR_OFFSET: "{{ kaslr_offset }}"
+      register: make_run_benchmark
+    - name: Store benchmark stdout
+      ansible.builtin.copy:
+        content: "{{ make_run_benchmark.stdout | default('error') | replace('\\n', '\n') }}"
+        dest: "{{ local_out_dir }}/{{ inventory_hostname }}-benchmark.out"
+        mode: "660"
+      delegate_to: localhost
+    - name: Store benchmark stderr
+      ansible.builtin.copy:
+        content: "{{ make_run_benchmark.stderr | default('error') | replace('\\n', '\n') }}"
+        dest: "{{ local_out_dir }}/{{ inventory_hostname }}-benchmark.err"
+        mode: "660"
+      delegate_to: localhost
+
+  ignore_errors: true

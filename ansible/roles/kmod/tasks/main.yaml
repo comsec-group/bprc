@@ -1,0 +1,34 @@
+- name: "Check for kernel module {{ kmod_name }}"
+  when: "not (kmod_force | default(false))"
+  ansible.builtin.stat:
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+    path: "/proc/{{ kmod_name }}"
+  register: stat_proc
+
+- name: Install kernel module
+  when: "(kmod_force | default(false) or (not stat_proc.stat.exists))"
+  block:
+    - name: "Remove old module {{ kmod_name }}"
+      become: true
+      community.general.make:
+        chdir: "{{ kmod_path }}"
+        target: remove
+      register: make_remove_result
+      failed_when: "make_remove_result.failed and 'is not currently loaded' not in make_remove_result.stderr"
+
+    - name: "Clean module {{ kmod_name }}"
+      community.general.make:
+        chdir: "{{ kmod_path }}"
+        target: clean
+
+    - name: "Build module {{ kmod_name }}"
+      community.general.make:
+        chdir: "{{ kmod_path }}"
+
+    - name: "Add module {{ kmod_name }}"
+      become: true
+      community.general.make:
+        chdir: "{{ kmod_path }}"
+        target: install

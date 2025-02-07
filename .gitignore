@@ -1,0 +1,7 @@
+main
+out
+tables
+figures
+*.bkp*
+__pycache__
+.vscode

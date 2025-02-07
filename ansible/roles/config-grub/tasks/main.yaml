@@ -1,0 +1,31 @@
+- name: Configure GRUB_CMDLINE_LINUX
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    regexp: "^GRUB_CMDLINE_LINUX="
+    line: 'GRUB_CMDLINE_LINUX="{{ grub_cmdline_linux }}"'
+    backup: true
+  notify: "Restore grub config"
+  register: grub_backup_first
+
+- name: Configure GRUB_CMDLINE_LINUX_DEFAULT
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    regexp: "^GRUB_CMDLINE_LINUX_DEFAULT="
+    line: 'GRUB_CMDLINE_LINUX_DEFAULT="{{ grub_cmdline_linux_default }}"'
+    backup: true
+  notify: "Restore grub config"
+  register: grub_backup_second
+
+- name: Update grub config
+  when: "grub_backup_first.changed or grub_backup_second.changed"
+  become: true
+  ansible.builtin.command:
+    cmd: "update-grub"
+  changed_when: true
+
+- name: Reboot to ensure correct configuration
+  when: "grub_backup_first.changed or grub_backup_second.changed"
+  become: true
+  ansible.builtin.reboot:

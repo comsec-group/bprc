@@ -1,0 +1,11 @@
+- name: Restore grub config
+  vars:
+    backup_file: "{{ (grub_backup_first.backup != '') | ternary(grub_backup_first.backup, grub_backup_second.backup) }}"
+  become: true
+  ansible.builtin.command: "mv '{{ backup_file }}' /etc/default/grub"
+  changed_when: true
+  notify: "Reboot"
+
+- name: "Reboot"
+  become: true
+  ansible.builtin.reboot:

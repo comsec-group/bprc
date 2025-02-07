@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-only
+CC = aarch64-linux-android35-clang -march=armv8.2-a
+
+SRC = $(wildcard *.c)
+BIN = $(patsubst %.c,%,$(SRC))
+INC = -I../uarch-research-fw/lib/
+LIB = ../uarch-research-fw/lib/memtools.o ../uarch-research-fw/lib/stats.o
+
+CFLAGS  = -g -O2 -Wall -Wno-language-extension-token -Wno-unused-function -pedantic $(LIB) $(INC) -DMARCH_ARMv8
+
+.PHONY: all clean
+
+../uarch-research-fw/lib/memtools.o:
+	make -C ../uarch-research-fw/lib CC="$(CC)" memtools.o
+
+../uarch-research-fw/lib/stats.o:
+	make -C ../uarch-research-fw/lib CC="$(CC)" stats.o
+
+all: $(LIB) $(BIN)
+
+clean:
+	$(RM) $(BIN)
+	$(RM) $(LIB)

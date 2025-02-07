@@ -1,0 +1,171 @@
+---
+- name: "Perform Experiment"
+  hosts: "{{ host }}"
+  force_handlers: True # to ensure restoring of grub
+  gather_facts: true
+  gather_subset:
+    - "env"
+    - "date_time"
+    - "network"
+    - "!all"
+    - "!min"
+
+  vars:
+    base_dir: "{{ ansible_env.HOME }}/.experimentor/bprc-paper"
+    framework_dir: "{{ base_dir }}/uarch-research-fw"
+    experiment_dir: "{{ base_dir }}/{{ experiment }}"
+
+    local_framework_dir: "../experiments/uarch-research-fw"
+    local_experiment_dir: "../experiments/{{ experiment }}"
+    local_out_dir: "{{ local_experiment_dir }}/out/{{ inventory_hostname }}"
+    local_archive_base_dir: "{{ local_experiment_dir }}/out/.archive/"
+    local_archive_dir: "{{ local_archive_base_dir }}/{{ inventory_hostname }}.{{ ansible_date_time.epoch }}"
+
+    # experiment configuration
+    experiment_timeout: 10000
+    _experiment_core: "{{ experiment_core | default(2) }}"
+    _experiment_march: "{{ experiment_march | default('MARCH_GOLDEN') }}"
+    _custom_args: "{{ experiment_args | default('') }}"
+
+  tasks:
+    - name: Check for existing output dir
+      delegate_to: localhost
+      ansible.builtin.stat:
+        path: "{{ local_out_dir }}"
+      register: stat_local_out_dir
+
+    - name: Create archive dir
+      delegate_to: localhost
+      when: stat_local_out_dir.stat.exists
+      ansible.builtin.file:
+        path: "{{ local_archive_base_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+
+    - name: Backup old outut dir
+      delegate_to: localhost
+      when: stat_local_out_dir.stat.exists
+      ansible.builtin.command: 'mv "{{ local_out_dir }}" "{{ local_archive_dir }}"'
+
+    # disable SMAP and SMEP for the microbenchmarks
+    - name: Ensure default mitigations
+      vars:
+        grub_cmdline_linux_default: "quiet nosmap nosmep clearcpuid=295,308"
+      ansible.builtin.include_role:
+        name: config-grub
+
+    - name: Create remote dir
+      ansible.builtin.file:
+        path: "{{ base_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+
+    - name: Copy src
+      ansible.posix.synchronize:
+        src: "{{ local_experiment_dir }}"
+        dest: "{{ base_dir }}"
+        delete: true
+        rsync_opts:
+          - "--exclude=run.yaml"
+          - "--exclude=main"
+          - "--exclude=*.out"
+          - "--exclude=out"
+
+    - name: Copy framework
+      ansible.posix.synchronize:
+        src: "{{ local_framework_dir }}"
+        dest: "{{ base_dir }}"
+        delete: true
+        rsync_opts:
+          - "--exclude=examples"
+          - "--exclude=exp_*"
+          - "--exclude=*.cmd"
+          - "--exclude=*.ko"
+          - "--exclude=*.mod*"
+          - "--exclude=*.o"
+          - "--exclude=Module.symvers"
+          - "--exclude=modules.order"
+        times: false
+
+    - name: "Install kernel modules"
+      vars:
+        kmod_name: "ap"
+        kmod_path: "{{ framework_dir }}/kmod_ap"
+      ansible.builtin.include_role:
+        name: kmod
+
+    - name: "Error catcher"
+      block:
+        - name: "Clean experiment"
+          community.general.make:
+            chdir: "{{ experiment_dir }}"
+            target: clean
+            params:
+              MARCH: "{{ _experiment_march }}"
+          register: build
+
+        - name: "Build experiment"
+          community.general.make:
+            chdir: "{{ experiment_dir }}"
+            params:
+              MARCH: "{{ _experiment_march }}"
+          register: build
+
+        - name: "Run experiment"
+          become: true # some experiments need to access performance counters
+          community.general.make:
+            chdir: "{{ experiment_dir }}"
+            target: run
+            params:
+              MARCH: "{{ _experiment_march }}"
+              CORE: "{{ _experiment_core }}"
+              CUSTOM_ARGS: "{{ _custom_args }}"
+          async: "{{ experiment_timeout }}"
+          poll: 1
+          register: make_exp_run
+
+      always:
+        - name: Create output dir
+          delegate_to: localhost
+          ansible.builtin.file:
+            path: "{{ local_out_dir }}"
+            state: directory
+            mode: "u=rwx,g=rwx,o="
+
+        - name: Store metadata
+          delegate_to: localhost
+          ansible.builtin.copy:
+            content: |
+              {
+                "hostname": "{{ ansible_hostname }}",
+                "experiment_core": {{ _experiment_core }},
+                "experiment_march": "{{ _experiment_march }}",
+              }
+            dest: "{{ local_out_dir }}/metadata.json"
+            mode: "660"
+
+        - name: Store build stdout
+          delegate_to: localhost
+          ansible.builtin.copy:
+            content: "{{ build.stdout | default('error') | replace('\\n', '\n') }}"
+            dest: "{{ local_out_dir }}/build.out"
+            mode: "660"
+        - name: Store build stderr
+          delegate_to: localhost
+          ansible.builtin.copy:
+            content: "{{ build.stderr | default('error') | replace('\\n', '\n') }}"
+            dest: "{{ local_out_dir }}/build.err"
+            mode: "660"
+
+        - name: Store experiment stdout
+          delegate_to: localhost
+          ansible.builtin.copy:
+            content: "{{ make_exp_run.stdout | default('error') | replace('\\n', '\n') }}"
+            dest: "{{ local_out_dir }}/run.out"
+            mode: "660"
+        - name: Store experiment stderr
+          delegate_to: localhost
+          ansible.builtin.copy:
+            content: "{{ make_exp_run.stderr | default('error') | replace('\\n', '\n') }}"
+            dest: "{{ local_out_dir }}/run.err"
+            mode: "660"

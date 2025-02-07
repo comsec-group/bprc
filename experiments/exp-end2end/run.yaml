@@ -1,0 +1,83 @@
+# SPDX-License-Identifier: GPL-3.0-only
+---
+- name: "Evaluate attack"
+  hosts: "{{ host }}"
+  force_handlers: True # to ensure restoring of grub
+  gather_facts: true
+  gather_subset:
+    - "env"
+    - "date_time"
+    - "!all"
+    - "!min"
+
+  vars:
+    base_dir: "{{ ansible_env.HOME }}/.experimentor/bprc-paper"
+    framework_dir: "{{ base_dir }}/uarch-research-fw"
+    experiment_dir: "{{ base_dir }}/exp-end2end"
+    
+    experiment_repetitions: 1000
+    experiment_core: 2
+    experiment_march: MARCH_GOLDEN
+
+    local_experiment_dir: "./"
+    local_out_base_dir: "{{ local_experiment_dir }}/out/{{ inventory_hostname }}"
+    local_archive_base_dir: "{{ local_experiment_dir }}/out/.archive/"
+    local_archive_dir: "{{ local_archive_base_dir }}/{{ inventory_hostname }}.{{ ansible_date_time.epoch }}"
+  tasks:
+    - name: Check for existing output dir
+      delegate_to: localhost
+      ansible.builtin.stat:
+        path: "{{ local_out_base_dir }}"
+      register: stat_local_out_dir
+
+    - name: Create archive dir
+      delegate_to: localhost
+      when: stat_local_out_dir.stat.exists
+      ansible.builtin.file:
+        path: "{{ local_archive_base_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+
+    - name: Backup old outut dir
+      delegate_to: localhost
+      when: stat_local_out_dir.stat.exists
+      ansible.builtin.command: 'mv "{{ local_out_base_dir }}" "{{ local_archive_dir }}"'
+
+    - name: Copy src
+      ansible.posix.synchronize:
+        src: "{{ local_experiment_dir }}"
+        dest: "{{ experiment_dir }}"
+        delete: true
+        rsync_opts:
+          - "--exclude=run.yaml"
+          - "--exclude=main"
+          - "--exclude=*.out"
+          - "--exclude=out"
+
+    - name: Copy framework
+      ansible.posix.synchronize:
+        src: "../uarch-research-fw"
+        dest: "{{ base_dir }}"
+        delete: true
+        rsync_opts:
+          - "--exclude=examples"
+          - "--exclude=exp_*"
+          - "--exclude=*.cmd"
+          - "--exclude=*.ko"
+          - "--exclude=*.mod*"
+          - "--exclude=*.o"
+          - "--exclude=Module.symvers"
+          - "--exclude=modules.order"
+        times: false
+
+    - name: Ensure default mitigations
+      vars:
+        grub_cmdline_linux_default: "quiet"
+      ansible.builtin.include_role:
+        name: ../../ansible/roles/config-grub
+
+    - name: Run Attacks
+      vars:
+        local_out_dir: "{{ local_out_base_dir }}/{{ item }}"
+      include_tasks: "run-single.yaml"
+      loop: "{{ range(0, experiment_repetitions) | list }}"

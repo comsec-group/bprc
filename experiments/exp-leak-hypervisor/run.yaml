@@ -1,0 +1,210 @@
+# SPDX-License-Identifier: GPL-3.0-only
+---
+- name: Perform Experiment
+  hosts: "{{ host }}"
+  force_handlers: True # to ensure restoring of grub
+  gather_facts: true
+  gather_subset:
+    - "env"
+    - "date_time"
+    - "network"
+    - "!all"
+    - "!min"
+
+  vars:
+    base_dir: "{{ ansible_env.HOME }}/.experimentor/bprc-paper"
+    framework_dir: "{{ base_dir }}/uarch-research-fw"
+    linux_dir: "{{ base_dir }}/linux"
+    build_dir: "{{ linux_dir }}/tools/testing/selftests/kvm"
+    rev_eng_dir: "{{ linux_dir }}/tools/testing/selftests/kvm/x86_64/rev_eng"
+    linux_framework_lib_dir: "{{ build_dir }}/lib/uarch-research-fw"
+    linux_framework_include_dir: "{{ build_dir }}/include/uarch-research-fw"
+
+    local_roles_dir: "../../ansible/roles"
+    local_framework_dir: "../uarch-research-fw"
+    local_experiment_dir: "./"
+    local_out_dir: "{{ local_experiment_dir }}/out/{{ inventory_hostname }}"
+    local_archive_base_dir: "{{ local_experiment_dir }}/out/.archive/"
+    local_archive_dir: "{{ local_archive_base_dir }}/{{ inventory_hostname }}.{{ ansible_date_time.epoch }}"
+
+    # experiment configuration
+    experiment_timeout: 10000
+    _experiment_core: "{{ experiment_core | default(2) }}"
+    _experiment_march: "{{ experiment_march | default('MARCH_GOLDEN') }}"
+
+  tasks:
+    - name: Check for existing output dir
+      delegate_to: localhost
+      ansible.builtin.stat:
+        path: "{{ local_out_dir }}"
+      register: stat_local_out_dir
+
+    - name: Create archive dir
+      delegate_to: localhost
+      when: stat_local_out_dir.stat.exists
+      ansible.builtin.file:
+        path: "{{ local_archive_base_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+
+    - name: Backup old outut dir
+      delegate_to: localhost
+      when: stat_local_out_dir.stat.exists
+      ansible.builtin.command: 'mv "{{ local_out_dir }}" "{{ local_archive_dir }}"'
+
+    # disable SMAP and SMEP for the microbenchmarks
+    # disable all mitigations because of Intel's IBPB behavior on newer microcodes
+    # we selectively enable eIBRS in the experiment
+    - name: Ensure default mitigations
+      vars:
+        grub_cmdline_linux_default: "quiet nosmap nosmep clearcpuid=295,308 mitigations=off"
+      ansible.builtin.include_role:
+        name: "{{ local_roles_dir }}/config-grub"
+
+    - name: Create remote dir
+      ansible.builtin.file:
+        path: "{{ base_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+
+    - name: Get linux v6.6 stable source
+      ansible.builtin.git:
+        repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
+        dest: "{{ linux_dir }}"
+        version: v6.6
+        update: false
+        depth: 1
+        single_branch: true
+
+    - name: get the linux config from the system
+      ansible.builtin.shell:
+        cmd: cp /boot/config-$(uname -r) "{{ linux_dir }}"/.config
+    
+    - name: Create rev_eng dir
+      ansible.builtin.file:
+        path: "{{ rev_eng_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+
+    - name: Copy src
+      ansible.posix.synchronize:
+        src: "{{ local_experiment_dir }}"
+        dest: "{{ rev_eng_dir }}"
+        delete: true
+        rsync_opts:
+          - "--exclude=run.yaml"
+          - "--exclude=main"
+          - "--exclude=out"
+
+    - name: Apply makefile patch
+      ansible.builtin.copy:
+        src: "Makefile"
+        dest: "{{ build_dir }}/Makefile"
+        mode: "u=rw,g=rw,o="
+
+    - name: Copy framework
+      ansible.posix.synchronize:
+        src: "{{ local_framework_dir }}"
+        dest: "{{ base_dir }}"
+        delete: true
+        rsync_opts:
+          - "--exclude=examples"
+          - "--exclude=exp_*"
+          - "--exclude=*.cmd"
+          - "--exclude=*.ko"
+          - "--exclude=*.mod*"
+          - "--exclude=*.o"
+          - "--exclude=Module.symvers"
+          - "--exclude=modules.order"
+        times: false
+
+    - name: Link framework into linux lib
+      ansible.builtin.file: 
+        src: "{{ framework_dir }}"
+        dest: "{{ linux_framework_lib_dir }}"
+        state: link
+    - name: Link framework into linux include
+      ansible.builtin.file: 
+        src: "{{ framework_dir }}"
+        dest: "{{ linux_framework_include_dir }}"
+        state: link
+
+    - name: Install ap kernel module
+      vars:
+        kmod_name: "ap"
+        kmod_path: "{{ framework_dir }}/kmod_ap"
+      ansible.builtin.include_role:
+        name: "{{ local_roles_dir }}/kmod"
+    - name: Install spec_ctrl kernel module
+      vars:
+        kmod_name: "spec_ctrl"
+        kmod_path: "{{ framework_dir }}/kmod_spec_ctrl"
+      ansible.builtin.include_role:
+        name: "{{ local_roles_dir }}/kmod"
+
+    - name: Create output dir
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: "{{ local_out_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+
+    - name: Store metadata
+      delegate_to: localhost
+      ansible.builtin.copy:
+        content: |
+          {
+            "hostname": "{{ ansible_hostname }}",
+            "experiment_core": {{ _experiment_core }},
+            "experiment_march": "{{ _experiment_march }}",
+          }
+        dest: "{{ local_out_dir }}/metadata.json"
+        mode: "u=rw,g=rw,o="
+
+    - name: Error catcher
+      block:
+        - name: "Build the headers"
+          community.general.make:
+            chdir: "{{ linux_dir }}"
+            target: headers
+          register: build_headers
+        - name: "Build the experiment"
+          community.general.make:
+            chdir: "{{ build_dir }}"
+          register: build
+
+        - name: "Run the experiment"
+          become: true
+          ansible.builtin.command:
+            cmd: "taskset -c {{ _experiment_core }} ./x86_64/rev_eng/main {{ _experiment_core }}"
+            chdir: "{{ build_dir }}"
+          async: "{{ experiment_timeout }}"
+          poll: 5
+          register: make_exp_run
+
+      always:
+        - name: Store build stdout
+          delegate_to: localhost
+          ansible.builtin.copy:
+            content: "{{ build.stdout | default('error') | replace('\\n', '\n') }}"
+            dest: "{{ local_out_dir }}/build.out"
+            mode: "660"
+        - name: Store build stderr
+          delegate_to: localhost
+          ansible.builtin.copy:
+            content: "{{ build.stderr | default('error') | replace('\\n', '\n') }}"
+            dest: "{{ local_out_dir }}/build.err"
+            mode: "660"
+
+        - name: Store experiment stdout
+          delegate_to: localhost
+          ansible.builtin.copy:
+            content: "{{ make_exp_run.stdout | default('error') | replace('\\n', '\n') }}"
+            dest: "{{ local_out_dir }}/run.out"
+            mode: "660"
+        - name: Store experiment stderr
+          delegate_to: localhost
+          ansible.builtin.copy:
+            content: "{{ make_exp_run.stderr | default('error') | replace('\\n', '\n') }}"
+            dest: "{{ local_out_dir }}/run.err"
+            mode: "660"

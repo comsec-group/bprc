@@ -1,0 +1,84 @@
+- name: Get LM-Bench
+  ansible.builtin.git:
+    repo: 'https://github.com/intel/lmbench.git'
+    dest: "{{ lmbench_dir }}"
+    version: 701c6c3
+    update: false
+- name: Ensure dependencies
+  become: true
+  ansible.builtin.apt:
+    pkg:
+      - build-essential
+      - libtirpc-dev
+- name: Fix build script LDLIBS
+  ansible.builtin.lineinfile:
+    path: "{{ lmbench_dir }}/scripts/build"
+    regexp: '^LDLIBS.*tirpc'
+    line: 'LDLIBS="${LDLIBS} -ltirpc"'
+    insertbefore: '# now go ahead and build everything!'
+- name: Fix build script CFLAGS
+  ansible.builtin.lineinfile:
+    path: "{{ lmbench_dir }}/scripts/build"
+    regexp: '^CFLAGS.*tirpc'
+    line: 'CFLAGS="${CFLAGS} -I/usr/include/tirpc"'
+    insertbefore: '# now go ahead and build everything!'
+- name: Build lmbench
+  community.general.make:
+    chdir: "{{ lmbench_dir }}"
+- name: Add generic config
+  ansible.builtin.copy:
+    src: CONFIG.generic
+    dest: "{{ lmbench_dir }}/bin/x86_64-linux-gnu/CONFIG.{{ ansible_hostname }}"
+    mode: "664"
+
+# Cleanup previous runs
+- name: Cleanup tmp
+  become: true
+  ansible.builtin.file:
+    path: "/var/tmp/lmbench"
+    state: absent
+
+- name: Cleanup results
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ lmbench_dir }}/results/x86_64-linux-gnu"
+    - "{{ lmbench_dir }}/results/x86_64-linux-gnu.zip"
+
+- name: Run lmbench
+  community.general.make:
+    chdir: "{{ lmbench_dir }}"
+    target: rerun
+  async: "{{ lmbench_timeout }}"
+  poll: 10
+  loop: "{{ range(0, lmbench_iterations) | list }}"
+
+# download results
+- when: "lmbench_iterations > 0"
+  block:
+    - name: Archive the files
+      community.general.archive:
+        path: "{{ lmbench_dir }}/results/x86_64-linux-gnu/"
+        dest: "{{ lmbench_dir }}/results/x86_64-linux-gnu.zip"
+        mode: "664"
+        format: zip
+
+    - name: Download results
+      ansible.builtin.fetch:
+        src: "{{ lmbench_dir }}/results/x86_64-linux-gnu.zip"
+        dest: "{{ lmbench_out_dir }}.zip"
+        flat: true
+
+    - name: Create output dir
+      ansible.builtin.file:
+        path: "{{ lmbench_out_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+      delegate_to: localhost
+
+    - name: Unpack results
+      ansible.builtin.unarchive:
+        src: "{{ lmbench_out_dir }}.zip"
+        dest: "{{ lmbench_out_dir }}"
+      delegate_to: localhost

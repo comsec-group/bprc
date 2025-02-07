@@ -1,0 +1,55 @@
+- name: Get UnixBench
+  ansible.builtin.git:
+    repo: 'https://github.com/kdlucas/byte-unixbench.git'
+    dest: "{{ unixbench_dir }}"
+    version: 2c29fe3
+    update: false
+- name: Build UnixBench
+  community.general.make:
+    chdir: "{{ unixbench_dir }}/UnixBench"
+
+- name: Cleanup results
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ unixbench_dir }}/UnixBench/results"
+    - "{{ unixbench_dir }}/UnixBench/results.zip"
+
+- name: Run UnixBench
+  ansible.builtin.command:
+    chdir: "{{ unixbench_dir }}/UnixBench"
+    cmd: "./Run"
+  changed_when: false
+  async: "{{ unixbench_timeout }}"
+  poll: 10
+  loop: "{{ range(0, unixbench_iterations) | list }}"
+
+# download results
+- when: "unixbench_iterations > 0"
+  block:
+    - name: Archive the files
+      community.general.archive:
+        path: "{{ unixbench_dir }}/UnixBench/results/"
+        dest: "{{ unixbench_dir }}/UnixBench/results.zip"
+        mode: "664"
+        format: zip
+
+    - name: Download results
+      ansible.builtin.fetch:
+        src: "{{ unixbench_dir }}/UnixBench/results.zip"
+        dest: "{{ unixbench_out_dir }}.zip"
+        flat: true
+
+    - name: Create output dir
+      ansible.builtin.file:
+        path: "{{ unixbench_out_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+      delegate_to: localhost
+
+    - name: Unpack results
+      ansible.builtin.unarchive:
+        src: "{{ unixbench_out_dir }}.zip"
+        dest: "{{ unixbench_out_dir }}"
+      delegate_to: localhost

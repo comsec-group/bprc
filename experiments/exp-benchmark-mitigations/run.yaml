@@ -1,0 +1,172 @@
+# SPDX-License-Identifier: GPL-3.0-only
+---
+- name: "Run LMBench"
+  hosts: "{{ host }}"
+  gather_facts: true
+  force_handlers: True # to ensure restoring of grub
+  gather_subset:
+    - "env"
+    - "date_time"
+    - "network"
+    - "!all"
+    - "!min"
+
+  vars:
+    base_dir: "{{ ansible_env.HOME }}/.experimentor/bprc-paper"
+
+    lmbench_dir: "{{ base_dir }}/lmbench"
+    lmbench_iterations: 5
+    lmbench_timeout: 1800
+
+    unixbench_dir: "{{ base_dir }}/unixbench"
+    unixbench_iterations: 5
+    unixbench_timeout: 7200
+
+    # output
+    base_out_dir: "./out/{{ ansible_hostname }}"
+    archive_out_dir: "./out/.archive/{{ ansible_hostname }}.{{ ansible_date_time.epoch }}"
+
+    _baseline_enabled: "{{ baseline | default(False)}}"
+    _retpoline_enabled: "{{ retpoline | default(False)}}"
+    _ipred_enabled: "{{ ipred | default(False)}}"
+
+  tasks:
+    # backup old results
+    - name: Check for existing output dir
+      delegate_to: localhost
+      ansible.builtin.stat:
+        path: "{{ base_out_dir }}"
+      register: stat_base_out_dir
+
+    - name: Create archive dir
+      delegate_to: localhost
+      when: stat_base_out_dir.stat.exists
+      ansible.builtin.file:
+        path: "{{ archive_out_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+
+    - name: Backup old output dir
+      delegate_to: localhost
+      when: stat_base_out_dir.stat.exists
+      ansible.builtin.command: 'mv "{{ base_out_dir }}" "{{ archive_out_dir }}"'
+
+    # create remote base directory
+    - name: Create remote dir
+      ansible.builtin.file:
+        path: "{{ base_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
+
+    # Run benchmarks with different configurations
+
+    # baseline with no special grub configuration
+    # GRUB_CMDLINE_LINUX=""
+    # GRUB_CMDLINE_LINUX_DEFAULT="quiet"
+    #
+    - name: Baseline
+      when: "_baseline_enabled"
+      vars:
+        configuration_name: baseline
+        configuration_out_dir: "{{ base_out_dir }}/{{ configuration_name }}"
+        spectre_v2_file: "{{ configuration_out_dir }}/spectre_v2.txt"
+        msr_file: "{{ configuration_out_dir }}/msr.txt"
+        lmbench_out_dir: "{{ configuration_out_dir }}/lmbench"
+        unixbench_out_dir: "{{ configuration_out_dir }}/unixbench"
+      block:
+        - name: Prepare grub
+          vars:
+            grub_cmdline_linux_default: "quiet"
+          ansible.builtin.include_role:
+            name: ../../ansible/roles/config-grub
+
+        - name: Get metadata
+          ansible.builtin.include_tasks: download-metadata.yaml
+
+        - name: Run lmbench
+          ansible.builtin.include_role:
+            name: ../../ansible/roles/run-lmbench
+
+        - name: Run UnixBench
+          ansible.builtin.include_role:
+            name: ../../ansible/roles/run-unixbench
+
+        # flush handlers, restores the previous grub configuration
+        - name: Restore grub configuration
+          meta: flush_handlers
+
+    # ipred-dis-s
+    # GRUB_CMDLINE_LINUX_DEFAULT="quiet"
+    # manually set the MSR for all cores
+    - name: IPRED_DIS_S
+      when: "_ipred_enabled"
+      vars:
+        configuration_name: ipred
+        configuration_out_dir: "{{ base_out_dir }}/{{ configuration_name }}"
+        spectre_v2_file: "{{ configuration_out_dir }}/spectre_v2.txt"
+        msr_file: "{{ configuration_out_dir }}/msr.txt"
+        lmbench_out_dir: "{{ configuration_out_dir }}/lmbench"
+        unixbench_out_dir: "{{ configuration_out_dir }}/unixbench"
+      block:
+        - name: Prepare grub
+          vars:
+            grub_cmdline_linux_default: "quiet"
+          ansible.builtin.include_role:
+            name: ../../ansible/roles/config-grub
+
+        - name: Get metadata
+          ansible.builtin.include_tasks: download-metadata.yaml
+
+        - name: Set all MSRs to enable IPRED_DIS_S
+          become: true
+          ansible.builtin.shell:
+            cmd: 'for i in $(seq 0 $(($(nproc) - 1))); do sudo wrmsr -p $i 0x48 0x411; echo -n "core[$i]: "; sudo rdmsr -p $i 0x48; done'
+
+        - name: Get metadata
+          ansible.builtin.include_tasks: download-metadata.yaml
+
+        - name: Run lmbench
+          ansible.builtin.include_role:
+            name: ../../ansible/roles/run-lmbench
+
+        - name: Run UnixBench
+          ansible.builtin.include_role:
+            name: ../../ansible/roles/run-unixbench
+
+        # flush handlers, restores the previous grub configuration
+        - name: Restore grub configuration
+          meta: flush_handlers
+
+    # retpoline(+rrsba_dis_s)
+    # GRUB_CMDLINE_LINUX=""
+    # GRUB_CMDLINE_LINUX_DEFAULT="quiet spectre_v2=retpoline"
+    - name: Retpoline
+      when: "_retpoline_enabled"
+      vars:
+        configuration_name: retpoline
+        configuration_out_dir: "{{ base_out_dir }}/{{ configuration_name }}"
+        spectre_v2_file: "{{ configuration_out_dir }}/spectre_v2.txt"
+        msr_file: "{{ configuration_out_dir }}/msr.txt"
+        lmbench_out_dir: "{{ configuration_out_dir }}/lmbench"
+        unixbench_out_dir: "{{ configuration_out_dir }}/unixbench"
+      block:
+        - name: Prepare grub
+          vars:
+            grub_cmdline_linux_default: "quiet spectre_v2=retpoline"
+          ansible.builtin.include_role:
+            name: ../../ansible/roles/config-grub
+
+        - name: Get metadata
+          ansible.builtin.include_tasks: download-metadata.yaml
+
+        - name: Run lmbench
+          ansible.builtin.include_role:
+            name: ../../ansible/roles/run-lmbench
+
+        - name: Run UnixBench
+          ansible.builtin.include_role:
+            name: ../../ansible/roles/run-unixbench
+
+        # flush handlers, restores the previous grub configuration
+        - name: Restore grub configuration
+          meta: flush_handlers

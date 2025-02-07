@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: GPL-3.0-only
+diff --git a/Makefile b/Makefile
+index 5bbc9807cbb3..4162befc5506 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1229,7 +1229,7 @@ endif
+ 	$(Q)$(MAKE) $(hdr-inst)=$(hdr-prefix)arch/$(SRCARCH)/include/uapi
+ 
+ ifeq ($(KBUILD_EXTMOD),)
+-core-y		+= kernel/ certs/ mm/ fs/ ipc/ security/ crypto/ block/ io_uring/
++core-y		+= kernel/ certs/ mm/ fs/ ipc/ security/ crypto/ block/ io_uring/ bhi/
+ 
+ vmlinux-dirs	:= $(patsubst %/,%,$(filter %/, \
+ 		     $(core-y) $(core-m) $(drivers-y) $(drivers-m) \
+diff --git a/bhi/Makefile b/bhi/Makefile
+new file mode 100644
+index 000000000000..902b39ec2cf8
+--- /dev/null
++++ b/bhi/Makefile
+@@ -0,0 +1 @@
++obj-y := bhi.o
+diff --git a/bhi/bhi.c b/bhi/bhi.c
+new file mode 100644
+index 000000000000..4091a9a8d0cb
+--- /dev/null
++++ b/bhi/bhi.c
+@@ -0,0 +1,29 @@
++#include <linux/kernel.h>
++#include <linux/syscalls.h>
++#include <asm/memory.h>
++
++#define ARMV8_PMUSERENR_EN_EL0 (1ULL << 0) /*  EL0 access enable */
++#define ARMV8_PMCNTENSET_EL0_ENABLE                                            \
++    ((1ULL << 31) | (1ULL << 0)) /* *< Enable Perf count reg */
++
++SYSCALL_DEFINE0(bhi_enable)
++{
++    uint64_t val;
++
++    /*  Enable user-mode access to counters. */
++    isb();
++    asm volatile("msr pmuserenr_el0, %0"
++             :
++             : "r"((u64)ARMV8_PMUSERENR_EN_EL0));
++    isb();
++    asm volatile("mrs %0, pmuserenr_el0" : "=r" (val));
++
++    /* Enables the cycle counter register */
++    asm volatile("msr pmcntenset_el0, %0" : : "r"(ARMV8_PMCNTENSET_EL0_ENABLE));
++
++    /* Print register id_aa64pfr0_el1 to verify if CSV2 is supported */
++    asm volatile("mrs %0, id_aa64pfr0_el1" : "=r"(val));
++    printk("bhi: id_aa64pfr0_el1 = 0x%016lx\n", val);
++
++    return val;
++}
+\ No newline at end of file
+diff --git a/include/uapi/asm-generic/unistd.h b/include/uapi/asm-generic/unistd.h
+index f7b735dabf35..e0ec3215d4fa 100644
+--- a/include/uapi/asm-generic/unistd.h
++++ b/include/uapi/asm-generic/unistd.h
+@@ -862,8 +862,11 @@ __SYSCALL(__NR_process_madvise, sys_process_madvise)
+ #define __NR_process_mrelease 448
+ __SYSCALL(__NR_process_mrelease, sys_process_mrelease)
+ 
++#define __NR_bhi_enable 450
++__SYSCALL(__NR_bhi_enable, sys_bhi_enable)
++
+ #undef __NR_syscalls
+-#define __NR_syscalls 449
++#define __NR_syscalls 451
+ 
+ /*
+  * 32 bit systems traditionally used different

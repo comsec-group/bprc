@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-3.0-only
+- name: Copy vulnerabilities information
+  ansible.builtin.fetch:
+    src: "/sys/devices/system/cpu/vulnerabilities/spectre_v2"
+    dest: "{{ spectre_v2_file}}"
+    flat: true
+
+- name: Ensure MSR module is loaded
+  become: true
+  community.general.modprobe:
+    name: msr
+    state: present
+
+- name: Ensure MSR tools are installed
+  become: true
+  ansible.builtin.apt:
+    pkg: msr-tools
+
+- name: Get MSR information
+  become: true
+  ansible.builtin.shell:
+    cmd: 'for i in $(seq 0 $(($(nproc) - 1))); do echo -n "core[$i]: "; sudo rdmsr -p $i 0x48; done'
+  register: msr_state
+
+- name: Store MSR information
+  delegate_to: localhost
+  ansible.builtin.copy:
+    content: "{{ msr_state.stdout }}"
+    dest: "{{ msr_file }}"
+    mode: "660"
+
