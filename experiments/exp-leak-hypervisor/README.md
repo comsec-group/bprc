@@ -29,6 +29,7 @@ export OUT_DIR="$(pwd)/out/manual"
 
 # load kmod_ap kernel module
 make -C ../uarch-research-fw/kmod_ap/ install
+make -C ../uarch-research-fw/kmod_spec_ctrl/ install
 
 # get linux v6.6
 git clone https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git --branch v6.6 --single-branch --depth 1

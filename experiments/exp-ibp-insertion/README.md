@@ -54,5 +54,5 @@ The results are printed to the console.
 ### Expected Results
 
 We ran this experiment on the Intel performance (P-Cores), Cypress Cove and Skylake cores.
-For 'Random History' we expect many hits on the BTB (>90%) and very few on the IBP (<1%>).
-For 'Matching History' we expect few hits on the BTB (<10%>) and many hits on the IBP (>90%).
+For 'Random History' we expect many hits on the BTB (>90%) and very few on the IBP (<1%).
+For 'Matching History' we expect few hits on the BTB (<10%) and many hits on the IBP (>90%).

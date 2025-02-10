@@ -5,3 +5,4 @@ figures
 *.bkp*
 __pycache__
 .vscode
+.venv
