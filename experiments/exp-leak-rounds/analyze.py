@@ -5,6 +5,9 @@ import sys
 from os import path
 
 import matplotlib.pyplot as p
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 SCRIPT_DIR = path.dirname(__file__)
 sys.path.append(os.path.join(SCRIPT_DIR, ".."))
@@ -17,8 +20,12 @@ MAX_POINTS = 16
 def create_plot(data_sets):
     fig, ax = p.subplots(1, 2, figsize=(5, 2.5), layout="constrained")
 
+    colors = [
+        '#467aaf',
+        '#f07584',
+    ]
     key = "jump_results_btb_attempts"
-    for data_set in data_sets:
+    for i, data_set in enumerate(data_sets):
         y = [f / 1000 for f in data_set["data"][key][:MAX_POINTS]]
         x = range(1, len(y) + 1)
         ax[0].plot(
@@ -27,6 +34,7 @@ def create_plot(data_sets):
             label=exp_metadata.SERVER_MAP[data_set["metadata"]["hostname"]]["cores"][
                 int(data_set["metadata"]["experiment_core"])
             ]["march"],
+            color=colors[i],
         )
 
         y = [f / 1000 for f in data_set["data"][f"dis_{key}"][:MAX_POINTS]]
@@ -34,10 +42,11 @@ def create_plot(data_sets):
         ax[1].plot(
             x,
             y,
+            color=colors[i],
         )
 
     for i in range(2):
-        ax[i].grid()
+        ax[i].grid(linestyle="dashed")
         ax[i].set_xlabel("repetition")
         # ax[i].set_xticks(range(1, MAX_POINTS + 1, 1))
         ax[i].set_ylim(-5, 105)
@@ -45,7 +54,7 @@ def create_plot(data_sets):
         ax[i].set_yticks(yticks)
         ax[i].set_yticklabels([f"{t}%" for t in yticks])
 
-    ax[0].set_ylabel("success rate")
+    ax[0].set_ylabel("gadget hit rate")
     ax[0].set_title("eIBRS")
     ax[1].set_title("eIBRS + BHI_DIS_S")
     ax[1].set_yticklabels([])

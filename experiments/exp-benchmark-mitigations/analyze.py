@@ -67,6 +67,7 @@ LMBENCH_METRICS = [
 
 def load_lmbench_run(file_name):
     results = []
+    metric_count = 0
     with open(file_name) as f:
         for l in f:
             for metric in LMBENCH_METRICS:
@@ -74,8 +75,12 @@ def load_lmbench_run(file_name):
                     match = re.match(LMBENCH_REGEX, l)
                     data_point = int(match.group("result").replace(".", ""))
                     results.append(data_point)
+                    metric_count += 1
                     break
 
+    if metric_count != len(LMBENCH_METRICS):
+        print("Broken file:", file_name)
+        exit(1)
     return results
 
 
@@ -96,22 +101,24 @@ def load_data_sets():
 
             unixbench_dir = os.path.join(configuration_dir, "unixbench")
             unixbench_data = []
-            for result_name in os.listdir(unixbench_dir):
-                if ".log" in result_name or ".html" in result_name:
-                    continue
+            if os.path.isdir(unixbench_dir):
+                for result_name in os.listdir(unixbench_dir):
+                    if ".log" in result_name or ".html" in result_name:
+                        continue
 
-                result_file = os.path.join(unixbench_dir, result_name)
-                data = load_unixbench_run(result_file)
-                unixbench_data.append(data)
-            host_data[configuration_name]["unixbench"] = unixbench_data
+                    result_file = os.path.join(unixbench_dir, result_name)
+                    data = load_unixbench_run(result_file)
+                    unixbench_data.append(data)
+                host_data[configuration_name]["unixbench"] = unixbench_data
 
             lmbench_dir = os.path.join(configuration_dir, "lmbench")
             lmbench_data = []
-            for result_name in os.listdir(lmbench_dir):
-                result_file = os.path.join(lmbench_dir, result_name)
-                data = load_lmbench_run(result_file)
-                lmbench_data.append(data)
-            host_data[configuration_name]["lmbench"] = lmbench_data
+            if os.path.isdir(lmbench_dir):
+                for result_name in os.listdir(lmbench_dir):
+                    result_file = os.path.join(lmbench_dir, result_name)
+                    data = load_lmbench_run(result_file)
+                    lmbench_data.append(data)
+                host_data[configuration_name]["lmbench"] = lmbench_data
         data_sets[host_name] = host_data
 
     return data_sets
@@ -174,6 +181,14 @@ def evaluate(data_sets):
     return new_data_sets
 
 
+def get_value(host_set, config, benchmark):
+    if config not in host_set:
+        return '-'
+    if benchmark not in host_set[config]:
+        return '-'
+    return host_set[config][benchmark]
+
+
 def save_table(results):
     output_dir = os.path.join(SCRIPT_DIR, "..", "..", "tables")
     os.makedirs(output_dir, exist_ok=True)
@@ -187,25 +202,20 @@ def save_table(results):
             if i % 2 == 0:
                 f.write(" \\colorLightGrey")
             f.write(" & ")
-            if "ipred" in host_set:
-                f.write(
-                    f"{host_set['ipred']['unixbench']}\\% / {host_set['ipred']['lmbench']}\\%")
-            else:
-                f.write("-")
+            f.write(
+                f"{get_value(host_set, 'ipred','unixbench')}\\% / {get_value(host_set,'ipred','lmbench')}\\%")
             if i % 2 == 0:
                 f.write(" \\colorLightGrey")
             f.write(" & ")
-            if "retpoline" in host_set:
-                f.write(
-                    f"{host_set['retpoline']['unixbench']}\\% / {host_set['retpoline']['lmbench']}\\%")
-            else:
-                f.write("-")
+            f.write(
+                f"{get_value(host_set, 'retpoline','unixbench')}\\% / {get_value(host_set,'retpoline','lmbench')}\\%")
             if i % 2 == 0:
                 f.write(" \\colorLightGrey")
             f.write(" \\\\\n")
 
             if "microcode" in host_set:
-                print(f"{server_map['code_name']} Microcode: {host_set['microcode']['unixbench']}% / {host_set['microcode']['lmbench']}%")
+                print(
+                    f"{server_map['code_name']} Microcode: {get_value(host_set, 'microcode','unixbench')}% / {get_value(host_set,'microcode','lmbench')}%")
         f.write(POSTFIX)
 
 

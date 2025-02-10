@@ -6,6 +6,8 @@ from os import path
 
 import matplotlib.pyplot as p
 import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 SCRIPT_DIR = path.dirname(__file__)
 sys.path.append(os.path.join(SCRIPT_DIR, ".."))
@@ -37,7 +39,7 @@ def create_plot(data_sets):
     ROWS = 3
     COLUMNS = 4
     HEIGHT = 4.5
-    WIDTH = 2 * HEIGHT
+    WIDTH = 1.95 * HEIGHT
     fig, ax = p.subplots(ROWS, COLUMNS, figsize=(
         WIDTH, HEIGHT), layout="constrained")
 
@@ -61,6 +63,7 @@ def create_plot(data_sets):
             zorder=4,
             # linestyle='dotted',
             linewidth=THICKNESS,
+            color='#467aaf',
         )
         # tiny shift to be able to see both jump and call in graph
         y = arr_add(data_set["data"]
@@ -74,6 +77,7 @@ def create_plot(data_sets):
             zorder=3,
             # linestyle='dashed'
             linewidth=THICKNESS,
+            color='#f07584',
         )
         if "ret_avg_mispredictions" in data_set["data"]:
             y = arr_add(data_set["data"]
@@ -86,6 +90,7 @@ def create_plot(data_sets):
                 label=label,
                 zorder=2,
                 linewidth=THICKNESS,
+                color='#228833',
             )
 
         axis.grid(linestyle="dashed")

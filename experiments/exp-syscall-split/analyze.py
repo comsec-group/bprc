@@ -5,6 +5,9 @@ import sys
 from os import path
 
 import matplotlib.pyplot as p
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 SCRIPT_DIR = path.dirname(__file__)
 sys.path.append(os.path.join(SCRIPT_DIR, ".."))
@@ -33,9 +36,9 @@ def create_plot(data_sets):
         ax.set_title(server_map["cores"][int(
             data_set["metadata"]["experiment_core"])]["march"])
 
-        ax.grid()
+        ax.grid(linestyle="dashed")
         ax.set_xlabel("# of NOP instructions delay")
-        ax.set_xticks([0, 128, 256, 384, 512])
+        ax.set_xticks([x for x in range(0, 513, 64)])
         ax.set_ylim(-5, 105)
         ax.set_yticks([0, 25, 50, 75, 100])
 
@@ -45,7 +48,7 @@ def create_plot(data_sets):
 
         fig.legend(
             loc="outside lower center",
-            ncols=4,
+            ncols=2,
         )
 
     output_dir = os.path.join(SCRIPT_DIR, "..", "..", "figures")

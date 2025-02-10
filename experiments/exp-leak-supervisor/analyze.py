@@ -14,8 +14,10 @@ PREFIX = r"""\begin{tabular}{lrrrr}
     \hline
 """
 POSTFIX = r"""    \hline
+    \multicolumn{4}{l}{$^a$ indistinguishable from noise}
 \end{tabular}
 """
+NOISE_PREFIX = r"$^a$"
 
 
 def _get_pct(hits_per_round):
@@ -35,6 +37,15 @@ def get_success_pct(hits_per_round):
     return f"{pct}\\% \\cellcolor{{tabred!{color}}}"
 
 
+def print_denoised_result(f, value, noise):
+    if value > noise:
+        f.write(get_success_pct(value))
+    else:
+        if value > 0:
+            f.write(NOISE_PREFIX)
+        f.write(get_success_pct_nocolor(value))
+
+
 def main():
     data_dir = path.join(SCRIPT_DIR, "out")
 
@@ -51,49 +62,57 @@ def main():
         for i, data_set in enumerate(data_sets):
             server_map = exp_metadata.SERVER_MAP[data_set["metadata"]["hostname"]]
 
-            print("Server:", server_map["cores"]
-                [int(data_set["metadata"]["experiment_core"])]["march"])
+            print(
+                "Server:",
+                server_map["cores"][int(data_set["metadata"]["experiment_core"])][
+                    "march"
+                ],
+            )
             jmp = _get_pct(data_set["data"][f"jump_hits_per_round_{metric}"])
             call = _get_pct(data_set["data"][f"call_hits_per_round_{metric}"])
             ret = _get_pct(data_set["data"][f"ret_hits_per_round_{metric}"])
-            check = _get_pct(max(data_set["data"][f"jump_check"],
-                        data_set["data"][f"call_check"],
-                        data_set["data"][f"ret_check"]))
+            check = _get_pct(
+                max(
+                    data_set["data"][f"jump_check"],
+                    data_set["data"][f"call_check"],
+                    data_set["data"][f"ret_check"],
+                )
+            )
             print(f"   (jmp, call, ret, noise): {jmp}%, {call}%, {ret}%, {check}%")
-            
+
             # in the paper we only show the intel systems in the table
-            if data_set["metadata"]["hostname"] == "ee-tik-cn128" or data_set["metadata"]["hostname"] == "ee-tik-cn140":
+            if (
+                data_set["metadata"]["hostname"] == "ee-tik-cn128"
+                or data_set["metadata"]["hostname"] == "ee-tik-cn140"
+            ):
                 continue
 
+            jump_result = data_set["data"][f"jump_hits_per_round_{metric}"]
+            call_result = data_set["data"][f"call_hits_per_round_{metric}"]
+            ret_result = data_set["data"][f"ret_hits_per_round_{metric}"]
+            noise_result = max(
+                data_set["data"][f"jump_check"],
+                data_set["data"][f"call_check"],
+                data_set["data"][f"ret_check"],
+            )
+
             f.write("    ")
-            f.write(server_map["cores"]
-                    [int(data_set["metadata"]["experiment_core"])]["march"])
+            f.write(
+                server_map["cores"][int(data_set["metadata"]["experiment_core"])][
+                    "march"
+                ]
+            )
             if i % 2 == 0:
                 f.write(" \\colorLightGrey")
 
             f.write(" & ")
-            f.write(
-                get_success_pct(data_set["data"]
-                                [f"jump_hits_per_round_{metric}"])
-            )
+            print_denoised_result(f, jump_result, noise_result)
             f.write(" & ")
-            f.write(
-                get_success_pct(data_set["data"]
-                                [f"call_hits_per_round_{metric}"])
-            )
+            print_denoised_result(f, call_result, noise_result)
             f.write(" & ")
-            f.write(
-                get_success_pct(data_set["data"]
-                                [f"ret_hits_per_round_{metric}"])
-            )
+            print_denoised_result(f, ret_result, noise_result)
             f.write(" & ")
-            f.write(
-                get_success_pct_nocolor(
-                    max(data_set["data"][f"jump_check"],
-                        data_set["data"][f"call_check"],
-                        data_set["data"][f"ret_check"]),
-                )
-            )
+            f.write(get_success_pct_nocolor(noise_result))
             f.write(r" \\")
             f.write("\n")
         f.write(POSTFIX)
