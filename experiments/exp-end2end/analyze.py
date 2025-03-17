@@ -9,15 +9,15 @@ LEAK_SIZE = 1048576
 SCRIPT_DIR_PATH = os.path.dirname(__file__)
 DATA_DIR_PATH = os.path.join(SCRIPT_DIR_PATH, "out/")
 
-KASLR_TIME_REGEX = r".*kaslr = (?P<kaslr_time>\d+.\d+)s"
+KASLR_TIME_REGEX = r".*kaslr time: (?P<kaslr_time>\d+.\d+)s"
 
-RB_TIME_REGEX = r".*rb = (?P<time>\d+.\d+)s"
-PM_TIME_REGEX = r".*pm = (?P<time>\d+.\d+)s"
-SHADOW_FIND_REGEX = r".*shadow_find = (?P<time>\d+.\d+)s"
-SHADOW_LEAK_REGEX = r".*shadow_leak = (?P<time>\d+.\d+)s"
-BANDWIDTH_SECRET_SIZE_REGEX = r".*secret_size = (?P<size>\d+)b"
-BANDWIDTH_LEAK_REGEX = r".*secret_leak = (?P<time>\d+.\d+)s"
-BANDWIDTH_MISTAKES_REGEX = r".*mistakes = (?P<count>\d+)"
+RB_TIME_REGEX = r".*rb_offset time:\s+(?P<time>\d+.\d+)s"
+PM_TIME_REGEX = r".*physmap_offset time:\s+(?P<time>\d+.\d+)s"
+SHADOW_FIND_REGEX = r".*shadow search time:\s+(?P<time>\d+.\d+)s"
+SHADOW_LEAK_REGEX = r".*shadow leak time:\s+(?P<time>\d+.\d+)s"
+BANDWIDTH_SECRET_SIZE_REGEX = r".*secret_size:\s+(?P<size>\d+)b"
+BANDWIDTH_LEAK_REGEX = r".*secret_leak:\s+(?P<time>\d+.\d+)s"
+BANDWIDTH_MISTAKES_REGEX = r".*mistakes:\s+(?P<count>\d+)"
 
 
 def s_to_ms(s):
@@ -185,6 +185,9 @@ def analyze_data(data_set):
 
 def main():
     for host in os.listdir(DATA_DIR_PATH):
+        if host == ".archive":
+            continue
+
         data_set = collect_data(DATA_DIR_PATH, host)
         results = analyze_data(data_set)
 

