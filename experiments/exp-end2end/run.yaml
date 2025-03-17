@@ -38,10 +38,16 @@
         state: directory
         mode: "u=rwx,g=rwx,o="
 
-    - name: Backup old outut dir
+    - name: Backup old output dir
       delegate_to: localhost
       when: stat_local_out_dir.stat.exists
       ansible.builtin.command: 'mv "{{ local_out_base_dir }}" "{{ local_archive_dir }}"'
+
+    - name: Create remote dir
+      ansible.builtin.file:
+        path: "{{ base_dir }}"
+        state: directory
+        mode: "u=rwx,g=rwx,o="
 
     - name: Copy src
       ansible.posix.synchronize:
@@ -72,7 +78,7 @@
 
     - name: Ensure default mitigations
       vars:
-        grub_cmdline_linux_default: "quiet"
+        grub_cmdline_linux_default: "quiet splash"
       ansible.builtin.include_role:
         name: ../../ansible/roles/config-grub
 

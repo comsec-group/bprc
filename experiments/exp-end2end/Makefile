@@ -4,7 +4,7 @@ CC = clang
 SRC = $(wildcard *.c)
 BIN = $(patsubst %.c,%,$(SRC))
 INC = -I../uarch-research-fw/lib/ -I../uarch-research-fw/
-LIB = ../uarch-research-fw/lib/memtools.o ../uarch-research-fw/lib/stats.o ../uarch-research-fw/lib/branch.o ../uarch-research-fw/lib/pfc.o
+LIB = ../uarch-research-fw/lib/memtools.o ../uarch-research-fw/lib/branch.o
 CORE ?= 2
 KASLR_OFFSET ?= 0x0
 
