@@ -7,6 +7,10 @@ Experiment to determine how `BHI_DIS_S` is implemented on recent Intel processor
 
 Replace `<experiment_core>` and `<experiment_march>` according to the [Microarchitectures](../../README.md#microarchitectures) table. The output is stored in [out](./out).
 
+> [!IMPORTANT]
+> The `BHI_DIS_S` mitigation is only available on newer processors.
+> Of the evaluated systems, only Raptor Lake Refresh, Sapphire Rapids, Raptor Lake and Alder Lake support it.
+
 ### Ansible
 
 > [!WARNING]

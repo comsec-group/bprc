@@ -71,6 +71,7 @@ pip install ansible
 
 If you already have an ansible inventory you can use the host names from your inventory.
 Otherwise you can use a hostname or IP address where the READMEs use `<hostname>` and add an argument with `-i <hostname>,` (**note the comma**).
+Add parameter -k if you need a password for ssh access, add -K parameter if you need a password for sudo.
 
 ```bash
 ansible-playbook -i example.com, run.yaml -e host=example.com
@@ -87,7 +88,7 @@ pip install matplotlib
 
 ### x86_64
 ```bash
-sudo apt install build-essential clang linux-headers-$(uname -r) msr-tools
+sudo apt install build-essential git clang linux-headers-$(uname -r) msr-tools
 ```
 
 ### armv8
@@ -97,6 +98,13 @@ The [Android NDK r27c](https://dl.google.com/android/repository/android-ndk-r27c
 
 We store server metadata in the file [exp_metadata.py](./experiments/exp_metadata.py).
 There is a dummy entry for the manual executions but if you use the ansible scripts on your own hosts you will need to add your servers to the `SERVER_MAP` in this file.
+
+The key in the map is the hostname of your server (you can run `hostname` to get it).
+Each value in the map has at least the `code_name` and `cores` attributes.
+`code_name` is the code name string for the given **processor**.
+`cores` lists all cores present on the given processor.
+Each entry is a dict with at least the `march` attribute which specifies the name of the microarchitecture for the given core.
+The order of the cores in the list should match the id Linux assigns each core (e.g., when using `taskset -c <core-id>`).
 
 # Overview
 

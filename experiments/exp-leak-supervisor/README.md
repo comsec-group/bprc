@@ -1,6 +1,8 @@
 # Investigate $BPRC_{U \rightarrow K}$
 
 Experiment to determine if $BPRC_{U \rightarrow K}$ is possible on recent Intel processors.
+Additionally, we empirically tested whether `IPRED_DIS_S` and `RSBA_DIS_S` can be used to mitigate branch privilege injection.
+These mitigations are only available on 12th gen and newer Intel processors.
 
 
 ## Reproduce
@@ -19,6 +21,8 @@ ansible-playbook ../../ansible/run.yaml -e host=<hostname> -e experiment=exp-lea
     -e experiment_core=<experiment_core> \
     -e experiment_march=<experiment_march>
 ```
+
+We used the following commands to test potential mitigations on 12th gen and newer Intel processors.
 
 Empirically verify that `IPRED_DIS_S` prevents $BPRC_{U \rightarrow K}$.
 ```bash
@@ -63,11 +67,17 @@ EOF
 
 # run
 make run CORE=$experiment_core | tee "$OUT_DIR/run.out"
+```
 
-# rerun with IPRED_DIS_S
+We used the following commands to test potential mitigations on 12th gen and newer Intel processors.
+
+To test `IPRED_DIS_S`.
+```bash
 make run CORE=$experiment_core CUSTOM_ARGS="0x11" | tee "$OUT_DIR/run.out"
+```
 
-# rerun with RSBA_DIS_S
+To test `RSBA_DIS_S`.
+```bash
 make run CORE=$experiment_core CUSTOM_ARGS="0x41" | tee "$OUT_DIR/run.out"
 ```
 

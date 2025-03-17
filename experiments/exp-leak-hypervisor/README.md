@@ -21,6 +21,26 @@ ansible-playbook run.yaml -e host=<hostname> \
 
 ### Manual
 
+**Configure GRUB**
+
+Due to the nature of the test, we need to first disable SMAP and SMEP using the kernel commandline.
+The following steps describe how to update the commandline when using GRUB:
+```bash
+# edit /etc/default/grub
+sudo vim /etc/default/grub
+
+# update the GRUB_CMDLINE_LINUX_DEFAULT by adding "nosmap nosmep clearcpuid=295,308 mitigations=off"
+# for example
+GRUB_CMDLINE_LINUX_DEFAULT="quiet nosmap nosmep clearcpuid=295,308 mitigations=off"
+# save and exit the file using ":wq"
+
+# update the grub configuration
+sudo update-grub
+
+# reboot
+sudo reboot
+```
+
 **Setup code in Linux selftest**
 
 ```bash
@@ -34,7 +54,7 @@ make -C ../uarch-research-fw/kmod_spec_ctrl/ install
 # get linux v6.6
 git clone https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git --branch v6.6 --single-branch --depth 1
 
-# link our into the selftest code framework
+# link our framework into the selftest code
 ln -s "$(pwd)/../uarch-research-fw" linux/tools/testing/selftests/kvm/lib/uarch-research-fw
 ln -s "$(pwd)/../uarch-research-fw" linux/tools/testing/selftests/kvm/include/uarch-research-fw
 

@@ -341,7 +341,7 @@ SERVER_MAP = {
     },
     "manual": {
         "code_name": "Local Processor (manual run)",
-        "cores": [CORE_LOCAL(i) for i in range(100)]
+        "cores": [CORE_LOCAL(i) for i in range(256)]
     },
 }
 

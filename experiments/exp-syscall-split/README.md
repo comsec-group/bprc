@@ -7,6 +7,12 @@ Experiment to determine the effect of timing on BPI.
 
 Replace `<experiment_core>` and `<experiment_march>` according to the [Microarchitectures](../../README.md#microarchitectures) table. The output is stored in [out](./out).
 
+> [!TIP]
+> This experiment runs very slow on some cores (e.g., Xeon Silver 4510, Xeon Silver 4514Y).
+> You can reduce the number of rounds in `main.c` and `analyze.py` by changing `NUM_ROUNDS` to something lower.
+> Values of 2000 (`main.c`) and 1000 (`analyze.py`), respectively, work well.
+> While this will lead to more noise in the plots, the effects are still observable.
+
 ### Ansible
 
 > [!WARNING]

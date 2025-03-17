@@ -1,11 +1,19 @@
 # End-to-End Attack
 
 End-to-end attack against Ubuntu 24.04 kernel version 6.8.0-47-generic on an Intel Raptor Lake processor.
+For the attack to work on other distros or kernel versions, you need to adapt the gadget addresses in `kaslr.c` and `attack.c`.
+Furthermore, the attack currently only searches about 32GiB of memory when looking for the reload buffer, physmap and `/etc/shadow`.
+If your system memory is larger, you need to increase `MEMORY_SIZE` in `attack.c` accordingly.
 
 
 ## Reproduce
 
 The output is stored in [out](./out).
+
+>[!TIP]
+> The attack was specifically designed for Intel Raptor Lake processors.
+> However, thanks to our artifact evaluators, we know that the attack also works on Xeon silver 4514Y (and subsequently our Xeon Silver 4510).
+> Since the attack expects 48-bit address spaces (although this is not in general a hard requirement), we need to add `no5lvl` to the kernel commandline on these processors.
 
 ### Ansible
 
@@ -47,6 +55,10 @@ make run-benchmark KASLR_OFFSET=<kaslr_offset> CORE=$experiment_core | tee "$OUT
 
 
 ## Analyze
+
+It is extremely likely that your system uses a different root password hash than ours.
+To make the analysis script work, you should replace `ROOT_HASH` in `analyze.py` with the first line of your `/etc/shadow`.
+You can use `sudo cat /etc/shadow` to get the contents of your shadow file.
 
 ```bash
 python3 analyze.py
