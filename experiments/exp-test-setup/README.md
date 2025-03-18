@@ -33,6 +33,9 @@ make -C ../uarch-research-fw/kmod_ap/ install
 make clean
 make MARCH=$experiment_march
 
+# create output directory
+mkdir -p $OUT_DIR
+
 # run (sudo required for Linux PFC)
 sudo make run CORE=$experiment_core | tee "$OUT_DIR/run.out"
 ```

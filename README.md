@@ -26,7 +26,13 @@ This repository contains the paper artifacts to reproduce all presented results.
 > Ansible will also reboot the target systems.
 > 
 > **Do not run them on your localhost.**
-> 
+>
+
+>[!TIP]
+> The manual installation of kernel modules with our Makefiles caused issues for some users.
+> You can load the kernel modules using `insmod` as a workaround.
+> When the manual instructions ask you to run `make -C ../uarch-research-fw/kmod_ap/ install` and it gets killed, try installing the module (`ap.ko` in this case) using `sudo insmod ../uarch-research-fw/kmod_ap/ap.ko` instead.
+
 # Requirements
 
 **OS:** Ubuntu (should run on 20.04, 22.04 and 24.04)
@@ -88,7 +94,7 @@ pip install matplotlib
 
 ### x86_64
 ```bash
-sudo apt install build-essential git clang linux-headers-$(uname -r) msr-tools
+sudo apt install build-essential git clang linux-headers-$(uname -r) msr-tools libtirpc-dev
 ```
 
 ### armv8
