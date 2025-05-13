@@ -1,12 +1,12 @@
 # Branch Privilege Injection: Compromising Spectre v2 Hardware Mitigations by Exploiting Branch Predictor Race Conditions
 
-|                          |                                              |
-| ------------------------ | -------------------------------------------- |
-| **Authors:**             | Sandro Rüegge, Johannes Wikner, Kaveh Razavi |
-| **Organization:**        | ETH Zürich                                   |
-| **Published at:**        | 34th USENIX Security Symposium               |
-| **Webpage:**             | TODO                                         |
-| **Security Advisories:** | TODO                                         |
+|                   |                                                        |
+| ----------------- | ------------------------------------------------------ |
+| **Authors:**      | Sandro Rüegge, Johannes Wikner, Kaveh Razavi           |
+| **Organization:** | ETH Zürich                                             |
+| **Published at:** | 34th USENIX Security Symposium                         |
+| **Webpage:**      | https://comsec.ethz.ch/bprc                            |
+| **Paper:**        | https://comsec.ethz.ch/wp-content/files/bprc_sec25.pdf |
 
 # Introduction
 
@@ -156,7 +156,7 @@ bprc
 # Citation
 
 ```bibtex
-@inproceedings{TODO,
+@inproceedings{bprc,
   title     = {{Branch Privilege Injection}: Compromising Spectre v2 Hardware
                Mitigations by Exploiting Branch Predictor Race Conditions},
   author    = {Sandro Rüegge, Johannes Wikner and Kaveh Razavi},
