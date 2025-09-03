@@ -1,12 +1,13 @@
 # Branch Privilege Injection: Compromising Spectre v2 Hardware Mitigations by Exploiting Branch Predictor Race Conditions
 
-|                   |                                                        |
-| ----------------- | ------------------------------------------------------ |
-| **Authors:**      | Sandro Rüegge, Johannes Wikner, Kaveh Razavi           |
-| **Organization:** | ETH Zürich                                             |
-| **Published at:** | 34th USENIX Security Symposium                         |
-| **Webpage:**      | https://comsec.ethz.ch/bprc                            |
-| **Paper:**        | https://comsec.ethz.ch/wp-content/files/bprc_sec25.pdf |
+|                     |                                                        |
+| ------------------- | ------------------------------------------------------ |
+| **Authors:**        | Sandro Rüegge, Johannes Wikner, Kaveh Razavi           |
+| **Organization:**   | ETH Zürich                                             |
+| **Published at:**   | 34th USENIX Security Symposium                         |
+| **Webpage:**        | https://comsec.ethz.ch/bprc                            |
+| **Paper:**          | https://comsec.ethz.ch/wp-content/files/bprc_sec25.pdf |
+| **BlackHat USA 25:**| https://www.blackhat.com/us-25/briefings/schedule/#-for-privilege-leaking-privileged-memory-from--using-under-embargo-45260 |
 
 # Introduction
 
@@ -124,6 +125,7 @@ bprc
    |- exp-benchmark-mitigations    # Mitigation performance evaluation
    |- exp-bhi-dis-s                # Intel's BHI_DIS_S behavior
    |- exp-btb-delay                # Branch predictor insertion delays on x86
+   |- exp-demo-blackhat            # Attack demo used at BlackHat USA 2025
    |- exp-end2end                  # End-to-end attack
    |- exp-ibp-insertion            # IBP insertion behavior
    |- exp-leak-hypervisor          # Hypervisor vulnerability test
